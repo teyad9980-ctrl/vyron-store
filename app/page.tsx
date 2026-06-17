@@ -1,6 +1,12 @@
 "use client";
 
 import { useState, FormEvent, useEffect } from "react";
+import { createClient } from "@supabase/supabase-js";
+
+// 🌐 إعدادات الاتصال المباشر بـ Supabase
+const supabaseUrl = "https://zqceqjbmtjdaxydvyaxm.supabase.co";
+const supabaseAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpxY2VxamJtdGpkYXh5ZHZ5YXhtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE1OTIyOTYsImV4cCI6MjA5NzE2ODI5Nn0.KG857chb4LswChtL4T-hO8of78APUZgI8Mjw7Tq-QWc";
+const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 // تعريف أنواع البيانات لحل مشاكل TypeScript
 interface Product {
@@ -8,7 +14,8 @@ interface Product {
   name: string;
   price: number;
   category: string;
-  images: string[];
+  image_url?: string; // العمود القادم من قاعدة البيانات
+  images?: string[];   // للتوافق مع الكود القديم
 }
 
 interface CartItem extends Product {
@@ -29,6 +36,9 @@ interface Order {
 }
 
 export default function Home() {
+  // 1. قمنا بإلغاء الـ 3 منتجات الثابتة وتحويلها إلى State يستقبل من Supabase
+  const [products, setProducts] = useState<Product[]>([]);
+  
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [activeImageIndex, setActiveImageIndex] = useState<number>(0); 
   const [cartItems, setCartItems] = useState<CartItem[]>([]); 
@@ -53,46 +63,21 @@ export default function Home() {
   const [passwordInput, setPasswordInput] = useState<string>("");
   const [isAuthorized, setIsAuthorized] = useState<boolean>(false);
 
-  const DASHBOARD_PASSWORD = "2540718583"; // 🔑 الباسورد الافتراضي للوحة التحكم بتاعتك
+  const DASHBOARD_PASSWORD = "2540718583"; // 🔑 الباسورد الخاص بك كما هو
 
-  const products: Product[] = [
-    { 
-      id: 1, 
-      name: "تيشرت أوفر سايز أسود - كوليكشن الصيف", 
-      price: 350, 
-      category: "Oversize",
-      images: [
-        "https://images.unsplash.com/photo-1562157873-818bc0726f68?q=80&w=600&auto=format&fit=crop",
-        "https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?q=80&w=600&auto=format&fit=crop",
-        "https://images.unsplash.com/photo-1618354691373-d851c5c3a990?q=80&w=600&auto=format&fit=crop"
-      ]
-    },
-    { 
-      id: 2, 
-      name: "تيشرت أبيض سادة - قطن 100%", 
-      price: 320, 
-      category: "Basic",
-      images: [
-        "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?q=80&w=600&auto=format&fit=crop",
-        "https://images.unsplash.com/photo-1581655353564-df123a1eb820?q=80&w=600&auto=format&fit=crop",
-        "https://images.unsplash.com/photo-1576566588028-4147f3842f27?q=80&w=600&auto=format&fit=crop"
-      ]
-    },
-    { 
-      id: 3, 
-      name: "هودي براند فيرون الشتوي مريح", 
-      price: 550, 
-      category: "Hoodies",
-      images: [
-        "https://images.unsplash.com/photo-1556905055-8f358a7a47b2?q=80&w=600&auto=format&fit=crop",
-        "https://images.unsplash.com/photo-1543163521-1bf539c55dd2?q=80&w=600&auto=format&fit=crop",
-        "https://images.unsplash.com/photo-1434389677669-e08b4cac3105?q=80&w=600&auto=format&fit=crop"
-      ]
-    },
-  ];
-
-  // تحميل الأوردرات المحفوظة عند فتح الموقع
+  // 2. جلب المنتجات من Supabase فور فتح الموقع
   useEffect(() => {
+    async function loadProducts() {
+      const { data, error } = await supabase.from("products").select("*");
+      if (error) {
+        console.error("حدث خطأ أثناء جلب المنتجات:", error.message);
+      } else if (data) {
+        setProducts(data);
+      }
+    }
+    
+    loadProducts();
+
     const savedOrders = localStorage.getItem("vyron_orders");
     if (savedOrders) {
       setOrders(JSON.parse(savedOrders));
@@ -117,7 +102,6 @@ export default function Home() {
 
   const totalCartPrice = cartItems.reduce((sum, item) => sum + item.price, 0);
 
-  // دالة حفظ الأوردر الجديد في لوحة التحكم والبيانات
   const handleSendOrder = (e: FormEvent) => {
     e.preventDefault();
     if (!customerName || !customerPhone || !customerAddress) {
@@ -152,7 +136,6 @@ export default function Home() {
     }, 800);
   };
 
-  // دالة حذف أوردر من لوحة التحكم
   const handleDeleteOrder = (orderId: number) => {
     if (confirm("هل أنت متأكد من حذف هذا الأوردر؟")) {
       const updated = orders.filter(o => o.id !== orderId);
@@ -176,10 +159,9 @@ export default function Home() {
     setIsCartOpen(false);
   };
 
-  // حساب إجمالي الإيرادات
   const totalRevenue = orders.reduce((sum, o) => sum + o.total, 0);
 
-  // شاشة لوحة التحكم (البيانات)
+  // شاشة لوحة التحكم
   if (isDashboardOpen) {
     return (
       <div className="min-h-screen bg-gray-900 text-white font-sans p-6 rtl" dir="rtl">
@@ -208,7 +190,6 @@ export default function Home() {
             </form>
           ) : (
             <div>
-              {/* بطاقات الإحصائيات */}
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 mb-8">
                 <div className="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow">
                   <p className="text-gray-400 font-bold text-sm">💰 إجمالي المبيعات</p>
@@ -220,11 +201,10 @@ export default function Home() {
                 </div>
                 <div className="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow">
                   <p className="text-gray-400 font-bold text-sm">🚀 حالة السيرفر الداخلي</p>
-                  <p className="text-xl font-black text-emerald-400 mt-3">نشط ومتصل (Local)</p>
+                  <p className="text-xl font-black text-emerald-400 mt-3">نشط ومتصل</p>
                 </div>
               </div>
 
-              {/* جدول البيانات الرئيسي */}
               <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden shadow-xl">
                 <div className="p-5 border-b border-gray-700 bg-gray-850">
                   <h3 className="font-bold text-lg">قائمة الطلبات الواردة بالتفصيل</h3>
@@ -264,12 +244,7 @@ export default function Home() {
                             </td>
                             <td className="p-4 font-black text-green-400 whitespace-nowrap">{order.total} EGP</td>
                             <td className="p-4 text-center">
-                              <button 
-                                onClick={() => handleDeleteOrder(order.id)} 
-                                className="bg-red-500/20 hover:bg-red-500 text-red-400 hover:text-white px-2 py-1 rounded text-xs font-bold transition"
-                              >
-                                حذف
-                              </button>
+                              <button onClick={() => handleDeleteOrder(order.id)} className="bg-red-500/20 hover:bg-red-500 text-red-400 hover:text-white px-2 py-1 rounded text-xs font-bold transition">حذف</button>
                             </td>
                           </tr>
                         ))}
@@ -285,8 +260,11 @@ export default function Home() {
     );
   }
 
-  // شاشة تفاصيل المنتج الواحد عند الضغط عليه
+  // شاشة تفاصيل المنتج الواحد
   if (selectedProduct) {
+    const displayImage = selectedProduct.image_url || (selectedProduct.images && selectedProduct.images[activeImageIndex]) || "/logo.jpg.jpeg";
+    const allImages = selectedProduct.image_url ? [selectedProduct.image_url] : (selectedProduct.images || ["/logo.jpg.jpeg"]);
+
     return (
       <div className="min-h-screen bg-white text-black font-sans p-6 md:p-12 selection:bg-gray-200">
         <div className="max-w-5xl mx-auto">
@@ -299,21 +277,23 @@ export default function Home() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-12 items-start">
             <div className="flex flex-col gap-4">
               <div className="w-full rounded-2xl overflow-hidden bg-gray-50 border border-gray-100 shadow-sm">
-                <img src={selectedProduct.images[activeImageIndex]} alt={selectedProduct.name} className="w-full h-auto object-cover" />
+                <img src={displayImage} alt={selectedProduct.name} className="w-full h-auto object-cover" />
               </div>
-              <div className="flex gap-3 justify-start overflow-x-auto py-2">
-                {selectedProduct.images.map((imgUrl, index) => (
-                  <button
-                    key={index}
-                    onClick={() => setActiveImageIndex(index)}
-                    className={`w-20 h-20 rounded-lg overflow-hidden border-2 bg-gray-50 transition ${
-                      activeImageIndex === index ? "border-black scale-95 shadow" : "border-gray-200 opacity-60"
-                    }`}
-                  >
-                    <img src={imgUrl} className="w-full h-full object-cover" />
-                  </button>
-                ))}
-              </div>
+              {allImages.length > 1 && (
+                <div className="flex gap-3 justify-start overflow-x-auto py-2">
+                  {allImages.map((imgUrl, index) => (
+                    <button
+                      key={index}
+                      onClick={() => setActiveImageIndex(index)}
+                      className={`w-20 h-20 rounded-lg overflow-hidden border-2 bg-gray-50 transition ${
+                        activeImageIndex === index ? "border-black scale-95 shadow" : "border-gray-200 opacity-60"
+                      }`}
+                    >
+                      <img src={imgUrl} className="w-full h-full object-cover" />
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
             <div className="text-right flex flex-col justify-start">
               <span className="text-xs text-gray-400 font-bold uppercase tracking-wider mb-2">{selectedProduct.category}</span>
@@ -349,8 +329,8 @@ export default function Home() {
           {isSuccessStage ? (
             <div className="flex flex-col items-center justify-center h-full text-center px-4">
               <div className="text-6xl mb-4">🎉</div>
-              <h2 className="text-2xl font-black mb-2">تم استلال طلبك بنجاح!</h2>
-              <p className="text-sm text-gray-500 mb-8 leading-relaxed">شكراً لتسوقك من VYRON. تم تسجيل الأوردر في لوحة البيانات بنجاح، وسنتواصل معك هاتفياً لتأكيد موعد تسليم الشحنة.</p>
+              <h2 className="text-2xl font-black mb-2">تم استلام طلبك بنجاح!</h2>
+              <p className="text-sm text-gray-500 mb-8 leading-relaxed">شكراً لتسوقك من VYRON. تم تسجيل الأوردر في لوحة البيانات بنجاح، وسنتأكد من التواصل معك لتأكيد الشحن.</p>
               <button onClick={closeSuccessScreen} className="w-full bg-black text-white py-3 rounded-xl font-bold text-sm hover:bg-gray-800 transition">العودة للمتجر</button>
             </div>
           ) : !isCheckoutStage ? (
@@ -372,7 +352,9 @@ export default function Home() {
                           <p className="text-xs text-gray-400 font-medium mt-0.5">مقاس: {item.size} | لون: {item.color}</p>
                           <p className="font-black text-sm mt-1">{item.price} EGP</p>
                         </div>
-                        <div className="w-16 h-16 rounded-lg overflow-hidden bg-gray-50 border border-gray-100"><img src={item.images[0]} alt={item.name} className="w-full h-full object-cover" /></div>
+                        <div className="w-16 h-16 rounded-lg overflow-hidden bg-gray-50 border border-gray-100">
+                          <img src={item.image_url || (item.images && item.images[0]) || "/logo.jpg.jpeg"} alt={item.name} className="w-full h-full object-cover" />
+                        </div>
                       </div>
                     ))
                   )}
@@ -409,13 +391,13 @@ export default function Home() {
                   </div>
                   <div>
                     <label className="block mb-1 text-sm font-bold text-gray-700">العنوان بالتفصيل *</label>
-                    <textarea required rows={3} disabled={isLoading} value={customerAddress} onChange={(e) => setCustomerAddress(e.target.value)} placeholder="اسم الشارع، رقم العمارة، الدور، الشقة، علامة مميزة" className="w-full border-2 border-gray-200 p-3 rounded-lg text-sm text-right focus:border-black outline-none resize-none" />
+                    <textarea required rows={3} disabled={isLoading} value={customerAddress} onChange={(e) => setCustomerAddress(e.target.value)} placeholder="اسم الشارع، رقم العمارة، الدور، الشقة" className="w-full border-2 border-gray-200 p-3 rounded-lg text-sm text-right focus:border-black outline-none resize-none" />
                   </div>
                 </div>
               </div>
               <div className="border-t border-gray-200 pt-6 mt-auto">
                 <div className="flex justify-between items-center mb-4 text-sm font-bold text-gray-500"><span>{totalCartPrice} EGP</span><span>حساب المنتجات:</span></div>
-                <button type="submit" disabled={isLoading} className="w-full bg-black text-white py-4 rounded-xl font-black text-base hover:bg-gray-800 transition shadow-md flex items-center justify-center gap-2">
+                <button type="submit" disabled={isLoading} className="w-full bg-black text-white py-4 rounded-xl font-black text-base hover:bg-gray-800 transition flex items-center justify-center gap-2">
                   {isLoading ? "جاري تسجيل طلبك..." : "تأكيد الطلب (الدفع عند الاستلام)"}
                 </button>
               </div>
@@ -437,22 +419,34 @@ export default function Home() {
       </header>
 
       <main className="max-w-6xl mx-auto px-6 py-12">
-        <div className="flex justify-between items-center mb-10"><span className="text-gray-400 text-sm font-medium">{products.length} قطع متوفرة</span><h3 className="text-3xl font-black tracking-tight text-right">أحدث القطع</h3></div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8">
-          {products.map((product) => (
-            <div key={product.id} onClick={() => setSelectedProduct(product)} className="group cursor-pointer border border-gray-200 rounded-xl overflow-hidden bg-white p-4 hover:shadow-xl transition duration-300">
-              <div className="w-full h-72 rounded-lg mb-4 overflow-hidden bg-gray-50"><img src={product.images[0]} alt={product.name} className="w-full h-full object-cover group-hover:scale-105 transition" /></div>
-              <span className="text-xs text-gray-400 font-bold uppercase tracking-wider">{product.category}</span>
-              <h4 className="text-lg font-bold mt-1 text-gray-900 text-right h-14 line-clamp-2">{product.name}</h4>
-              <div className="flex justify-between items-center mt-4 pt-4 border-t border-gray-100"><span className="text-black font-black text-xl">{product.price} EGP</span><button className="bg-black text-white px-4 py-2 rounded-lg font-bold text-xs">عرض التفاصيل</button></div>
-            </div>
-          ))}
+        <div className="flex justify-between items-center mb-10">
+          <span className="text-gray-400 text-sm font-medium">{products.length} قطع متوفرة</span>
+          <h3 className="text-3xl font-black tracking-tight text-right">أحدث القطع</h3>
         </div>
+        
+        {products.length === 0 ? (
+          <p className="text-center text-gray-400 py-12 font-medium">جاري تحميل المنتجات من قاعدة البيانات أو لا توجد منتجات حالياً...</p>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-8">
+            {products.map((product) => (
+              <div key={product.id} onClick={() => setSelectedProduct(product)} className="group cursor-pointer border border-gray-200 rounded-xl overflow-hidden bg-white p-4 hover:shadow-xl transition duration-300">
+                <div className="w-full h-72 rounded-lg mb-4 overflow-hidden bg-gray-50">
+                  <img src={product.image_url || (product.images && product.images[0]) || "/logo.jpg.jpeg"} alt={product.name} className="w-full h-full object-cover group-hover:scale-105 transition" />
+                </div>
+                <span className="text-xs text-gray-400 font-bold uppercase tracking-wider">{product.category}</span>
+                <h4 className="text-lg font-bold mt-1 text-gray-900 text-right h-14 line-clamp-2">{product.name}</h4>
+                <div className="flex justify-between items-center mt-4 pt-4 border-t border-gray-100">
+                  <span className="text-black font-black text-xl">{product.price} EGP</span>
+                  <button className="bg-black text-white px-4 py-2 rounded-lg font-bold text-xs">عرض التفاصيل</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </main>
 
       <footer className="border-t border-gray-200 mt-20 py-8 text-center text-xs text-gray-400 font-medium flex flex-col items-center gap-2">
         <span>© 2026 VYRON WEAR. ALL RIGHTS RESERVED.</span>
-        {/* 🔐 البوابة السرية للوحة التحكم */}
         <button onClick={() => setIsDashboardOpen(true)} className="mt-2 text-gray-300 hover:text-black font-bold underline cursor-pointer transition">
           💻 الدخول إلى لوحة التحكم والبيانات
         </button>
